@@ -149,17 +149,19 @@ const response = addCorsHeaders(
   }),
 );
 
+
 response.cookies.set(
   SESSION_COOKIE_NAME,
   session.token,
   {
     httpOnly: true,
-    secure: true,
-    sameSite: 'none',
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
     path: '/',
     expires: session.expiresAt,
   },
 );
+
 
 return response;
 

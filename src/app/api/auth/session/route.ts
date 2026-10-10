@@ -43,9 +43,22 @@ export async function DELETE(req: NextRequest) {
       await revokeSession(token);
     }
 
-    const response = NextResponse.json({ success: true, message: 'Logged out successfully' });
-    response.cookies.delete(SESSION_COOKIE_NAME);
-    return response;
+
+const response = NextResponse.json({
+  success: true,
+  message: 'Logged out successfully',
+});
+
+response.cookies.set(SESSION_COOKIE_NAME, '', {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax',
+  path: '/',
+  maxAge: 0,
+});
+
+return response;
+
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

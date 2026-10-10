@@ -1,0 +1,780 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String          @id @default(uuid())
+  phone          String          @unique
+  email          String?
+  passwordHash   String?
+  name           String?
+  role           Role            @default(PARTICIPANT)
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  auditLogs      AuditLog[]
+  orders         Order[]
+  sessions       Session[]
+  scannedTickets Ticket[]        @relation("ScannedTickets")
+  tickets        Ticket[]
+  scansPerformed TicketScan[]
+  adminRoles     UserAdminRole[]
+  testimonials   EventTestimonial[]
+
+  @@index([phone])
+  @@index([role])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  isRevoked Boolean  @default(false)
+  userAgent String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+}
+
+model OtpRequest {
+  id          String   @id @default(uuid())
+  phone       String
+  otpHash     String
+  attempts    Int      @default(0)
+  maxAttempts Int      @default(5)
+  expiresAt   DateTime
+  isUsed      Boolean  @default(false)
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([phone, createdAt])
+}
+
+model Organizer {
+  id          String   @id @default(uuid())
+  name        String
+  logoUrl     String?
+  email       String
+  phone       String
+  website     String?
+  description String?
+  socialLinks Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  events      Event[]
+}
+
+model Venue {
+  id            String   @id @default(uuid())
+  name          String
+  address       String
+  city          String
+  state         String
+  postalCode    String
+  latitude      Float?
+  longitude     Float?
+  googleMapsUrl String?
+  parkingInfo   String?
+  entryGateInfo String?
+  transportInfo String?
+  rules         String?
+  capacity      Int
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  events        Event[]
+  photos        VenuePhoto[]
+}
+
+model Event {
+  id                 String           @id @default(uuid())
+  title              String
+  slug               String           @unique
+  tagline            String?
+  description        String
+  startDate          DateTime
+  endDate            DateTime
+  doorsOpenTime      String?
+  heroImageUrl       String
+  heroVideoUrl       String?
+  status             EventStatus      @default(PUBLISHED)
+  termsAndConditions String?
+  refundPolicy       String?
+  whatsappGroupUrl   String?
+  whatsappGroupTitle String?          @default("Dandiya Night 3.0 Official WhatsApp Group")
+  whatsappGroupDesc  String?          @default("Emergency updates, announcements & gate guidelines")
+  whatsappEnabled    Boolean          @default(true)
+  instructions       Json?
+  venueId            String
+  organizerId        String
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  organizer          Organizer        @relation(fields: [organizerId], references: [id])
+  venue              Venue            @relation(fields: [venueId], references: [id])
+  faqs               Faq[]
+  galleries          Gallery[]
+  orders             Order[]
+  pricingRules       PricingRule[]
+  ticketTemplates    TicketTemplate[]
+  ticketTypes        TicketType[]
+  story              EventStory?
+  highlights         EventHighlight[]
+  schedules          EventSchedule[]
+  testimonials       EventTestimonial[]
+  teamMembers        TeamMember[]
+  sponsors           Sponsor[]
+  videos             EventVideo[]
+
+  @@index([slug])
+  @@index([status])
+}
+
+model TicketType {
+  id            String           @id @default(uuid())
+  eventId       String
+  name          String
+  category      TicketCategory
+  description   String?
+  price         Decimal          @db.Decimal(10, 2)
+  currency      String           @default("INR")
+  maxPerOrder   Int              @default(10)
+  saleStartDate DateTime
+  saleEndDate   DateTime
+  status        TicketSaleStatus @default(ACTIVE)
+  orderIndex    Int              @default(0)
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  orderItems    OrderItem[]
+  pricingRules  PricingRule[]
+  tickets       Ticket[]
+  inventory     TicketInventory?
+  event         Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, status])
+}
+
+model TicketInventory {
+  id            String     @id @default(uuid())
+  ticketTypeId  String     @unique
+  totalCapacity Int
+  reservedCount Int        @default(0)
+  soldCount     Int        @default(0)
+  version       Int        @default(1)
+  updatedAt     DateTime   @updatedAt
+  ticketType    TicketType @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
+
+  @@index([ticketTypeId])
+}
+
+model PricingRule {
+  id              String          @id @default(uuid())
+  eventId         String
+  ticketTypeId    String?
+  name            String
+  ruleType        PricingRuleType
+  discountPercent Decimal?        @db.Decimal(5, 2)
+  discountAmount  Decimal?        @db.Decimal(10, 2)
+  minQuantity     Int?
+  maxQuantity     Int?
+  validFrom       DateTime
+  validUntil      DateTime
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  event           Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  ticketType      TicketType?     @relation(fields: [ticketTypeId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([ticketTypeId])
+}
+
+model Coupon {
+  id             String             @id @default(uuid())
+  code           String             @unique
+  description    String?
+  discountType   CouponDiscountType
+  discountValue  Decimal            @db.Decimal(10, 2)
+  minOrderAmount Decimal?           @db.Decimal(10, 2)
+  maxDiscount    Decimal?           @db.Decimal(10, 2)
+  usageLimit     Int?
+  usedCount      Int                @default(0)
+  validFrom      DateTime
+  validUntil     DateTime
+  isActive       Boolean            @default(true)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  orders         Order[]
+
+  @@index([code])
+}
+
+model Order {
+  id             String      @id @default(uuid())
+  orderNumber    String      @unique
+  userId         String
+  eventId        String
+  couponId       String?
+  idempotencyKey String      @unique
+  status         OrderStatus @default(CREATED)
+  subtotal       Decimal     @db.Decimal(10, 2)
+  discountAmount Decimal     @default(0.00) @db.Decimal(10, 2)
+  taxAmount      Decimal     @default(0.00) @db.Decimal(10, 2)
+  convenienceFee Decimal     @default(0.00) @db.Decimal(10, 2)
+  totalAmount    Decimal     @db.Decimal(10, 2)
+  currency       String      @default("INR")
+  expiresAt      DateTime
+  customerName   String
+  customerPhone  String
+  customerEmail  String
+  metadata       Json?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  coupon         Coupon?     @relation(fields: [couponId], references: [id])
+  event          Event       @relation(fields: [eventId], references: [id])
+  user           User        @relation(fields: [userId], references: [id])
+  orderItems     OrderItem[]
+  payments       Payment[]
+  refunds        Refund[]
+  tickets        Ticket[]
+
+  @@index([userId])
+  @@index([eventId])
+  @@index([status])
+  @@index([orderNumber])
+}
+
+model OrderItem {
+  id           String     @id @default(uuid())
+  orderId      String
+  ticketTypeId String
+  unitPrice    Decimal    @db.Decimal(10, 2)
+  quantity     Int
+  totalPrice   Decimal    @db.Decimal(10, 2)
+  createdAt    DateTime   @default(now())
+  order        Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  ticketType   TicketType @relation(fields: [ticketTypeId], references: [id])
+
+  @@index([orderId])
+}
+
+model Payment {
+  id               String           @id @default(uuid())
+  orderId          String
+  gateway          PaymentGateway
+  gatewayOrderId   String?
+  gatewayPaymentId String?
+  gatewaySignature String?
+  amount           Decimal          @db.Decimal(10, 2)
+  currency         String           @default("INR")
+  status           PaymentStatus    @default(PENDING)
+  failureReason    String?
+  rawResponse      Json?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  order            Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  attempts         PaymentAttempt[]
+  refunds          Refund[]
+
+  @@index([orderId])
+  @@index([gatewayOrderId])
+  @@index([gatewayPaymentId])
+}
+
+model PaymentAttempt {
+  id              String   @id @default(uuid())
+  paymentId       String
+  attemptNumber   Int
+  status          String
+  gatewayResponse Json?
+  ipAddress       String?
+  createdAt       DateTime @default(now())
+  payment         Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+}
+
+model Refund {
+  id              String       @id @default(uuid())
+  orderId         String
+  paymentId       String
+  gatewayRefundId String?
+  amount          Decimal      @db.Decimal(10, 2)
+  reason          String
+  status          RefundStatus @default(PENDING)
+  failureReason   String?
+  initiatedBy     String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  order           Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  payment         Payment      @relation(fields: [paymentId], references: [id])
+
+  @@index([orderId])
+  @@index([paymentId])
+}
+
+model Ticket {
+  id              String       @id @default(uuid())
+  ticketNumber    String       @unique
+  validationToken String       @unique
+  orderId         String
+  userId          String
+  ticketTypeId    String
+  attendeeName    String
+  status          TicketStatus @default(ISSUED)
+  qrPayload       String
+  usedAt          DateTime?
+  scannedByUserId String?
+  pdfUrl          String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  order           Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  scannedByUser   User?        @relation("ScannedTickets", fields: [scannedByUserId], references: [id])
+  ticketType      TicketType   @relation(fields: [ticketTypeId], references: [id])
+  user            User         @relation(fields: [userId], references: [id])
+  scans           TicketScan[]
+  testimonials    EventTestimonial[]
+
+  @@index([validationToken])
+  @@index([orderId])
+  @@index([userId])
+  @@index([ticketTypeId])
+}
+
+model TicketScan {
+  id              String     @id @default(uuid())
+  ticketId        String
+  scannedByUserId String
+  result          ScanResult
+  gateName        String?
+  deviceInfo      String?
+  ipAddress       String?
+  scannedAt       DateTime   @default(now())
+  scannedByUser   User       @relation(fields: [scannedByUserId], references: [id])
+  ticket          Ticket     @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([scannedByUserId])
+  @@index([scannedAt])
+}
+
+model TicketTemplate {
+  id           String                  @id @default(uuid())
+  eventId      String
+  name         String
+  logoUrl      String?
+  bannerUrl    String?
+  primaryColor String                  @default("#780016")
+  accentColor  String                  @default("#D4AF37")
+  textColor    String                  @default("#FFFFFF")
+  qrPosition   String                  @default("RIGHT")
+  footerNotes  String?
+  termsText    String?
+  layoutConfig Json?
+  isDefault    Boolean                 @default(true)
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+  event        Event                   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  versions     TicketTemplateVersion[]
+
+  @@index([eventId])
+}
+
+model TicketTemplateVersion {
+  id         String         @id @default(uuid())
+  templateId String
+  version    Int
+  config     Json
+  status     String         @default("PUBLISHED")
+  createdAt  DateTime       @default(now())
+  template   TicketTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId])
+}
+
+model Gallery {
+  id          String         @id @default(uuid())
+  eventId     String
+  title       String
+  slug        String
+  description String?
+  isPublished Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  event       Event          @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  images      GalleryImage[]
+
+  @@index([eventId])
+}
+
+model GalleryImage {
+  id           String   @id @default(uuid())
+  galleryId    String
+  imageUrl     String
+  thumbnailUrl String?
+  caption      String?
+  altText      String?
+  orderIndex   Int      @default(0)
+  isPublished  Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  gallery      Gallery  @relation(fields: [galleryId], references: [id], onDelete: Cascade)
+
+  @@index([galleryId])
+}
+
+model WebhookEvent {
+  id          String         @id @default(uuid())
+  gateway     PaymentGateway
+  eventId     String
+  eventType   String
+  payload     Json
+  signature   String?
+  status      WebhookStatus  @default(PENDING)
+  error       String?
+  processedAt DateTime?
+  createdAt   DateTime       @default(now())
+
+  @@unique([gateway, eventId])
+  @@index([status])
+}
+
+model AdminRole {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  description String?
+  createdAt   DateTime         @default(now())
+  permissions RolePermission[]
+  userRoles   UserAdminRole[]
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  code        String           @unique
+  name        String
+  description String?
+  createdAt   DateTime         @default(now())
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  id           String     @id @default(uuid())
+  roleId       String
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  role         AdminRole  @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+}
+
+model UserAdminRole {
+  id     String    @id @default(uuid())
+  userId String
+  roleId String
+  role   AdminRole @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  user   User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  userId       String?
+  action       String
+  resourceType String
+  resourceId   String?
+  details      Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+  user         User?    @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([resourceType, resourceId])
+  @@index([createdAt])
+}
+
+model Faq {
+  id         String   @id @default(uuid())
+  eventId    String
+  question   String
+  answer     String
+  category   String   @default("General")
+  orderIndex Int      @default(0)
+  createdAt  DateTime @default(now())
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+}
+
+enum Role {
+  PARTICIPANT
+  SUPER_ADMIN
+  EVENT_ADMIN
+  FINANCE_ADMIN
+  VALIDATOR
+  CONTENT_ADMIN
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  COMPLETED
+  CANCELLED
+}
+
+enum TicketCategory {
+  EARLY_BIRD
+  REGULAR
+  VIP
+  COUPLE
+  GROUP
+  FAMILY
+  STUDENT
+  COMPLIMENTARY
+}
+
+enum TicketSaleStatus {
+  ACTIVE
+  PAUSED
+  SOLD_OUT
+  HIDDEN
+}
+
+enum PricingRuleType {
+  DYNAMIC_TIER
+  VOLUME_DISCOUNT
+  TIME_BASED
+}
+
+enum CouponDiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum OrderStatus {
+  CREATED
+  PAYMENT_PENDING
+  PAYMENT_VERIFICATION_PENDING
+  PAYMENT_VERIFIED
+  PAYMENT_FAILED
+  BOOKING_FAILED
+  REFUND_PENDING
+  REFUNDED
+}
+
+enum PaymentGateway {
+  RAZORPAY
+  PAYU
+  DEV_SANDBOX
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum RefundStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+enum TicketStatus {
+  ISSUED
+  USED
+  CANCELLED
+  REFUNDED
+}
+
+enum ScanResult {
+  VALID
+  INVALID
+  ALREADY_USED
+  CANCELLED
+  REFUNDED
+  WRONG_EVENT
+}
+
+enum WebhookStatus {
+  PENDING
+  PROCESSED
+  FAILED
+  IGNORED
+}
+
+model EventStory {
+  id           String   @id @default(uuid())
+  eventId      String   @unique
+  badge        String?  @default("THE CULTURAL PHENOMENON")
+  heading      String   @default("Where Traditions Meet Modern Festive Energy")
+  story        String   @db.Text
+  highlightOne String?  @default("Authentic Live Dhol & Dandiya Beats")
+  highlightTwo String?  @default("Grand Raas Circle under the Stars")
+  imageOneUrl  String?
+  imageTwoUrl  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+}
+
+model EventHighlight {
+  id          String   @id @default(uuid())
+  eventId     String
+  title       String
+  description String
+  iconName    String   @default("Sparkles")
+  imageUrl    String?
+  badge       String?
+  orderIndex  Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+}
+
+model EventSchedule {
+  id          String   @id @default(uuid())
+  eventId     String
+  time        String
+  title       String
+  description String
+  orderIndex  Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+}
+
+model EventTestimonial {
+  id               String   @id @default(uuid())
+  eventId          String
+  userId           String?
+  ticketId         String?
+  name             String
+  role             String?
+  quote            String   @db.Text
+  rating           Int      @default(5)
+  avatarUrl        String?
+  isVerified       Boolean  @default(false)
+  moderationStatus String   @default("APPROVED")
+  isFeatured       Boolean  @default(false)
+  isPublished      Boolean  @default(true)
+  orderIndex       Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  event            Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user             User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  ticket           Ticket?  @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
+  @@index([eventId])
+  @@index([userId])
+  @@index([ticketId])
+}
+
+model TeamMember {
+  id          String   @id @default(uuid())
+  eventId     String
+  name        String
+  role        String
+  bio         String?
+  imageUrl    String?
+  socialLinks Json?
+  orderIndex  Int      @default(0)
+  isPublished Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+}
+
+model Sponsor {
+  id          String   @id @default(uuid())
+  eventId     String
+  name        String
+  tier        String   @default("POWERED_BY")
+  logoUrl     String?
+  websiteUrl  String?
+  description String?
+  isFeatured  Boolean  @default(false)
+  socialLinks Json?
+  orderIndex  Int      @default(0)
+  isPublished Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+}
+
+model EventVideo {
+  id           String   @id @default(uuid())
+  eventId      String
+  title        String
+  description  String?
+  videoUrl     String
+  thumbnailUrl String?
+  isFeatured   Boolean  @default(false)
+  isPublished  Boolean  @default(true)
+  orderIndex   Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+}
+
+model VenuePhoto {
+  id              String   @id @default(uuid())
+  venueId         String
+  imageUrl        String
+  storageProvider String   @default("cloudinary") // "cloudinary" | "local"
+  storageAssetId  String?
+  title           String?
+  caption         String?
+  altText         String?
+  orderIndex      Int      @default(0)
+  isFeatured      Boolean  @default(false)
+  isPublished     Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  venue           Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@index([venueId])
+  @@index([isPublished])
+  @@index([orderIndex])
+}
+
+model PaymentConfig {
+  id                         String   @id @default(uuid())
+  gstEnabled                 Boolean  @default(true)
+  gstPercentage              Decimal  @default(18.00) @db.Decimal(5, 2)
+  gstTaxableBase             String   @default("SUBTOTAL") // "SUBTOTAL" | "PLATFORM_FEE" | "SUBTOTAL_AND_FEE"
+  gstDisplayLabel            String   @default("GST & Applicable Taxes (18%)")
+  platformFeeEnabled         Boolean  @default(true)
+  platformFeeType            String   @default("PERCENTAGE") // "PERCENTAGE" | "FIXED"
+  platformFeeValue           Decimal  @default(2.50) @db.Decimal(10, 2)
+  platformFeePayer           String   @default("CUSTOMER") // "CUSTOMER" | "PLATFORM"
+  taxApplicableOnPlatformFee Boolean  @default(false)
+  notes                      String?
+  updatedByUserId            String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  @@index([updatedAt])
+}
+

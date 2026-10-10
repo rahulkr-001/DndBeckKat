@@ -1,0 +1,38 @@
+{
+  "name": "dandiya-night-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone Backend API and Gate Verification Engine for Dandiya Night 3.0",
+  "scripts": {
+    "dev": "next dev -p 5000",
+    "build": "prisma generate && next build",
+    "start": "next start -p 5000",
+    "test": "tsx tests/critical-scenarios.test.ts && tsx tests/production-features.test.ts",
+    "db:migrate": "prisma migrate deploy",
+    "db:generate": "prisma generate",
+    "postinstall": "prisma generate"
+  },
+  "dependencies": {
+    "@prisma/client": "6.4.1",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/pdfkit": "^0.17.6",
+    "@types/qrcode": "^1.5.6",
+    "bcryptjs": "^3.0.3",
+    "cloudinary": "^2.11.0",
+    "next": "16.4.0",
+    "pdfkit": "^0.20.2",
+    "prisma": "6.4.1",
+    "qrcode": "^1.5.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "resend": "^6.32.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "tsx": "^4.23.15",
+    "typescript": "^5"
+  }
+}
